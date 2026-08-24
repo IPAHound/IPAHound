@@ -1,0 +1,1 @@
+{"query":"MATCH (n:IPA_CA)\nRETURN n","name":"Find IPA Certificate Authorities","description":"List all FreeIPA certificate authorities"}

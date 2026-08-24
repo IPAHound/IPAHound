@@ -1,0 +1,1 @@
+{"query":"MATCH (n:IPA_Domain)\nRETURN n","name":"Find all IPA Domains","description":"List all FreeIPA domains in the graph"}

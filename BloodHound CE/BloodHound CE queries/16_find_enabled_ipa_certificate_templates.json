@@ -1,0 +1,1 @@
+{"query":"MATCH (n:IPA_CertificateTemplate)\nWHERE n.Enabled = true\nRETURN n","name":"Find enabled IPA Certificate Templates","description":"Find IPA certificate templates that are currently enabled"}

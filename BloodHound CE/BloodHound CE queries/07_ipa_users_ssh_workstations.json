@@ -1,0 +1,1 @@
+{"query":"MATCH p=(g:IPA_Group)-[:IPA_MemberOf*0..]->()-[:IPA_CanSSH]->()<-[:IPA_MemberOf*0..]-(c:IPA_Computer)\nWHERE g.cn = \"ipausers\"\nRETURN p","name":"Find Workstations where IPA Users can SSH","description":"Find IPA computers where ipausers group members can SSH via HBAC rules"}

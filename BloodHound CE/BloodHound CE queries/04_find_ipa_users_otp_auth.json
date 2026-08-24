@@ -1,0 +1,1 @@
+{"query":"MATCH (n:IPA_User)\nWHERE n.PasswordAuthAllow = false\nRETURN n","name":"Find all IPA Users with OTP Auth","description":"Find IPA users that require OTP authentication (password auth disabled)"}

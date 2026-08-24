@@ -1,0 +1,1 @@
+{"query":"MATCH p=shortestPath((n)-[*1..]->(m:IPA_Computer))\nWHERE m.unconstraineddelegation = true AND n <> m\nRETURN p","name":"Shortest Paths to IPA Unconstrained Delegation Systems","description":"Find shortest paths to IPA computers with unconstrained delegation"}

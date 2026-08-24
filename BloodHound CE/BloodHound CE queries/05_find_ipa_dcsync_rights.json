@@ -1,0 +1,1 @@
+{"query":"MATCH p=()-[:IPA_DSync]->(:IPA_Domain)\nRETURN p","name":"Find IPA Principals with DCSync Rights","description":"Find principals that have DCSync rights over an IPA domain"}

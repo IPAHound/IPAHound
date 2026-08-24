@@ -1,0 +1,1 @@
+{"query":"MATCH p=(m:IPA_Group)-[*1..]->(n:IPA_Computer)\nWHERE m.cn = \"ipausers\"\nRETURN p","name":"Find Dangerous Privileges for IPA Domain Users","description":"Find all privilege paths from ipausers group to IPA computers"}

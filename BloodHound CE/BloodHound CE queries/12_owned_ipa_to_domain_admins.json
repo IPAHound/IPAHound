@@ -1,0 +1,1 @@
+{"query":"MATCH p=shortestPath((n)-[:*1..]->(m:IPA_Group))\nWHERE n.owned = true AND m.cn = \"admins\" AND n <> m\nRETURN p","name":"Shortest Paths to IPA Domain Admins from Owned Principals","description":"Find shortest paths from owned principals to IPA admins group"}

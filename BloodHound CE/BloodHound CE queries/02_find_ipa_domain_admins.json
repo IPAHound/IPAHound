@@ -1,0 +1,1 @@
+{"query":"MATCH p=(n:IPA_Group)<-[:IPA_MemberOf*1..]-(m)\nWHERE n.cn = \"admins\"\nRETURN p","name":"Find all IPA Domain Admins","description":"Find all members of the FreeIPA admins group"}

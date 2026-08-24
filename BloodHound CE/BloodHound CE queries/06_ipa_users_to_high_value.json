@@ -1,0 +1,1 @@
+{"query":"MATCH p=shortestPath((g:IPA_User)-[*1..]->(n))\nWHERE g<>n AND n.highvalue = true\nRETURN p","name":"Find All Paths from IPA Users to High Value Targets","description":"Find shortest paths from all IPA users to high value targets"}

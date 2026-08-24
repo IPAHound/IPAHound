@@ -1,0 +1,1 @@
+{"query":"MATCH (m:IPA_Computer)\nWHERE m.unconstraineddelegation = true\nRETURN m","name":"Find IPA Unconstrained Delegation Systems","description":"Find IPA computers configured for unconstrained delegation"}

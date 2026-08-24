@@ -1,0 +1,437 @@
+{
+  "schema": {
+    "name": "IPAHound",
+    "display_name": "IPAHound — FreeIPA BloodHound Collector",
+    "version": "v1.0.0",
+    "namespace": "IPA"
+  },
+  "node_kinds": [
+    {
+      "name": "IPA_Domain",
+      "display_name": "FreeIPA Domain",
+      "description": "A FreeIPA domain (realm)",
+      "is_display_kind": true,
+      "icon": "globe",
+      "color": "#3b82f6",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **IPA_Domain** node represents the root of a FreeIPA realm. It is the environment anchor — all IPA users, groups, computers, and services belong to exactly one domain."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**First-degree domain controllers**\n```cypher\nMATCH p=(n)-[r]->(d:IPA_Domain)\nWHERE r.isacl = true\nRETURN p\n```\n**Transitive domain controllers**\n```cypher\nMATCH p=shortestPath((n)-[r*1..]->(d:IPA_Domain))\nWHERE n <> d\nRETURN p\n```\n**Domain trusts (IPA ↔ AD)**\n```cypher\nMATCH p=(a:IPA_Domain)-[:IPA_TrustedBy]-(b)\nRETURN p\n```\n**Shorted path from owned objects**\n```cypher\nMATCH p=shortestPath((n:Tag_Owned)-[r*1..]->(d:IPA_Domain))\nWHERE n <> d\nRETURN p\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_User",
+      "display_name": "IPA User",
+      "description": "A FreeIPA user or system account",
+      "is_display_kind": true,
+      "icon": "user",
+      "color": "#ef4444",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_User** is a FreeIPA person or system account."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Users with password authentication**\n```cypher\nMATCH (n:IPA_User)\nWHERE n.ipaUserAuthType CONTAINS \"password\"\nRETURN n\n```\n**Users with OTP authentication**\n```cypher\nMATCH (n:IPA_User)\nWHERE n.ipaUserAuthType CONTAINS \"otp\"\nRETURN n\n```\n**Unrolled group membership for a user**\n```cypher\nMATCH p = (m:IPA_User)-[:IPA_MemberOf*1..]->(n:IPA_Group)\nWHERE m.name = \"USER@DOMAIN\"\nRETURN p\n```\n**First-degree SSH rights**\n```cypher\nMATCH p=(m:IPA_User)-[:IPA_CanSSH]->(n:IPA_Computer)\nWHERE m.name = \"USER@DOMAIN\"\nRETURN p\n```\n**Unrolled SSH rights (transitive via groups)**\n```cypher\nMATCH p=(m:IPA_User)-[:IPA_MemberOf|IPA_AddMember*0..]->()-[:IPA_CanSSH]->()<-[:IPA_MemberOf*0..]-(n:IPA_Computer)\nWHERE m.name = \"USER@DOMAIN\"\nRETURN p\n```\n**First-degree Sudo rights**\n```cypher\nMATCH p=(m:IPA_User)-[:IPA_CanSUDO]->(n:IPA_Computer)\nWHERE m.name = \"USER@DOMAIN\"\nRETURN p\n```\n**Unrolled Sudo rights**\n```cypher\nMATCH p=(m:IPA_User)-[:IPA_MemberOf|IPA_AddMember*0..]->()-[:IPA_CanSUDO]->()<-[:IPA_MemberOf*0..]-(n:IPA_Computer)\nWHERE m.name = \"USER@DOMAIN\"\nRETURN p\n```\n**Paths from users to high-value targets**\n```cypher\nMATCH p=shortestPath((g:IPA_User)-[*1..]->(n:Tag_Tier_Zero))\nWHERE g <> n\nRETURN p\n```\n**Transitive object control**\n```cypher\nMATCH (n) WHERE n.name <> \"USER@DOMAIN\"\nMATCH p=shortestPath((u:IPA_User)-[r*1..]->(n))\nWHERE u.name = \"USER@DOMAIN\"\nRETURN p\n```\n**Permissions and roles assigned to a user**\n```cypher\nMATCH p=(m:IPA_User)-[:IPA_MemberOf*1..]->(n:IPA_Permission|IPA_Role)\nWHERE m.name = \"USER@DOMAIN\"\nRETURN p\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_Group",
+      "display_name": "IPA Group",
+      "description": "A FreeIPA group, privilege, net group, or host group",
+      "is_display_kind": true,
+      "icon": "users",
+      "color": "#22c55e",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_Group** consolidates several FreeIPA objects: regular groups, system groups, privileges (`cn=pbac`), host groups, and net groups. Groups are the primary mechanism for delegating permissions — privileges are groups that hold permissions, and roles contain groups."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Members of the admins group**\n```cypher\nMATCH p=(n:IPA_Group)<-[:IPA_MemberOf*1..]-(m)\nWHERE n.cn = \"admins\"\nRETURN p\n```\n**Direct members of a specific group**\n```cypher\nMATCH (m)-[:IPA_MemberOf]->(g:IPA_Group)\nWHERE g.cn = \"GROUPNAME\"\nRETURN m\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_Computer",
+      "display_name": "IPA Computer",
+      "description": "A FreeIPA-joined host",
+      "is_display_kind": true,
+      "icon": "desktop",
+      "color": "#a855f7",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_Computer** is a host enrolled in the FreeIPA domain."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Computers with unconstrained delegation**```cypher\nMATCH (n:IPA_Computer)\nWHERE n.unconstraineddelegation = true\nRETURN n\n```\n**Who can SSH into computers**\n```cypher\nMATCH p=(n)-[:IPA_CanSSH]->(c:IPA_Computer)\nRETURN p\n```\n**Who can SUDO on computers**\n```cypher\nMATCH p=(n)-[:IPA_CanSUDO]->(c:IPA_Computer)\nRETURN p\n```\n**Inbound control rights for a computer**\n```cypher\nMATCH p=(n)-[r]->(c:IPA_Computer)\nWHERE c.name = \"COMPUTER@DOMAIN\"\nRETURN p\n```\n**Paths from owned principals to computers**\n```cypher\nMATCH p=shortestPath((a:Tag_Owned)-[*1..]->(b:IPA_Computer))\nWHERE a <> b\nRETURN p\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_Service",
+      "display_name": "IPA Service",
+      "description": "A FreeIPA service (Kerberos principal)",
+      "is_display_kind": true,
+      "icon": "server",
+      "color": "#f97316",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_Service** is a Kerberos service principal (e.g., `HTTP/server@REALM`). Services are linked to computers and can have their own keytabs. Key properties include `krbCanonicalName`, `krbLastPwdChange`, `managedBy`, and delegation flags."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Services with delegation rights**```cypher\nMATCH p=(s:IPA_Service)-[:IPA_AllowedToDelegate]->(n)\nRETURN p\n```\n**Services with unconstrained delegation**\n```cypher\nMATCH (n:IPA_Service)\nWHERE n.unconstraineddelegation = true\nRETURN n\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_Permission",
+      "display_name": "IPA Permission",
+      "description": "A FreeIPA PBAC permission",
+      "is_display_kind": true,
+      "icon": "key",
+      "color": "#eab308",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_Permission** is a FreeIPA Policy-Based Access Control permission. Permissions are granted to privileges (which are groups). They define what LDAP operations a principal can perform. IPAHound maps sensitive permissions to graph edges (e.g., DCSync from replication permissions)."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Paths from users to permissions**\n```cypher\nMATCH p=shortestPath((u:IPA_User)-[*1..]->(perm:IPA_Permission))\nRETURN p\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_Role",
+      "display_name": "IPA Role",
+      "description": "A FreeIPA role",
+      "is_display_kind": true,
+      "icon": "id-badge",
+      "color": "#6366f1",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_Role** is a FreeIPA role — a container that holds privilege groups and can be assigned to users/groups. Roles are the top-level delegation unit: Role → Privileges → Permissions."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Principals assigned to roles**\n```cypher\nMATCH p=(n)-[:IPA_MemberOf]->(r:IPA_Role)\nRETURN p\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_CA",
+      "display_name": "IPA Certificate Authority",
+      "description": "A FreeIPA certificate authority",
+      "is_display_kind": true,
+      "icon": "university",
+      "color": "#14b8a6",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_CA** represents a FreeIPA Certificate Authority. FreeIPA uses Dogtag PKI under the hood. CA ACLs control which certificate templates can be used by which principals on which hosts."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Find all IPA certificate authorities**\n```cypher\nMATCH (n:IPA_CA)\nRETURN n\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_CertificateTemplate",
+      "display_name": "IPA Certificate Template",
+      "description": "A FreeIPA certificate profile / template",
+      "is_display_kind": true,
+      "icon": "file-certificate",
+      "color": "#06b6d4",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_CertificateTemplate** is a FreeIPA certificate profile that defines the properties of issued certificates (key usage, extensions, validity, etc.). Templates are referenced by CA ACLs to control who can request which certificates."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Find all IPA certificate templates**\n```cypher\nMATCH (n:IPA_CertificateTemplate)\nRETURN n\n```\n**Templates with enrollment edges**\n```cypher\nMATCH p=(n)-[:IPA_Enroll]->(t:IPA_CertificateTemplate)\nRETURN p\n```\n**Who can enroll which templates**\n```cypher\nMATCH (n)-[:IPA_Enroll]->(t:IPA_CertificateTemplate)\nRETURN n.name, t.name\n```"
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_SELinux",
+      "display_name": "IPA SELinux User Map",
+      "description": "A FreeIPA SELinux user map rule",
+      "is_display_kind": true,
+      "icon": "shield-halved",
+      "color": "#64748b",
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "An **IPA_SELinux** node represents a FreeIPA SELinux user map rule. These rules map FreeIPA users to SELinux contexts on specific hosts, controlling the security context under which a user's sessions run."
+          }
+        },
+        "queries": {
+          "title": "Useful Queries",
+          "position": 3,
+          "markdown": {
+            "content": "**Find all SELinux user map rules**\n```cypher\nMATCH (n:IPA_SELinux)\nRETURN n\n```\nUsers mapped to SELinux rules\n```cypher\nMATCH p=(u)-[:IPA_MemberOf]->(s:IPA_SELinux)\nRETURN p\n```"
+          }
+        }
+      }
+    }
+  ],
+  "relationship_kinds": [
+    {
+      "name": "IPA_MemberOf",
+      "description": "Group or role membership",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **MemberOf** edge indicates that a principal is a direct member of a group, privilege, or role. This is the primary permission inheritance path in FreeIPA — privileges hold permissions, roles contain privileges, and users are assigned to roles."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_AddMember",
+      "description": "Ability to add members to a group via MemberManager attribute",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **AddMember** edge indicates that a principal has the `MemberManager` attribute on a group, granting the ability to add new members."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_ForceChangePassword",
+      "description": "Ability to create new Kerberos keys (ipaAllowedToPerform;write_keys)",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **ForceChangePassword** edge indicates that a principal has the `ipaAllowedToPerform;write_keys` right on a target, allowing it to create new Kerberos keys (effectively reset the keytab)."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_ReadKerberosKey",
+      "description": "Ability to read Kerberos keys / retrieve keytabs (ipaAllowedToPerform;read_keys)",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **ReadKerberosKey** edge indicates that a principal has the `ipaAllowedToPerform;read_keys` right on a target, allowing it to retrieve the target's keytab via `ipa-getkeytab` or equivalent."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_Owns",
+      "description": "Full control over a computer or service via ManagedBy attribute. Enables RBCD, key creation, SSH key management, and certificate management",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **Owns** edge indicates that a principal is listed in the `managedBy` attribute of a computer or service. This grants broad management capabilities: configuring RBCD, creating keytabs, adding SSH keys, and managing certificates."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_CanSSH",
+      "description": "HBAC rule allowing SSH access to a host",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **CanSSH** edge is derived from FreeIPA HBAC (Host-Based Access Control) rules. It indicates that a user or group can SSH into a host (or host group). With `--save-all-hbac`, additional `Can{*}` edges are created for other HBAC services."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_CanSUDO",
+      "description": "Combined HBAC and SUDO rules allowing sudo execution on a host",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **CanSUDO** edge is derived from the intersection of HBAC rules (SSH access) and SUDO rules (command execution). It indicates that a user can SSH into a host AND execute commands as root (or another user) via sudo."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_AllowedToDelegate",
+      "description": "Constrained delegation rights (S4U2Proxy) or RBCD via memberPrincipal",
+      "is_traversable": false,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **AllowedToDelegate** edge represents constrained delegation rights. It can originate from S4U2Proxy configuration (`cn=s4u2proxy`) or from RBCD via the `memberPrincipal` attribute on a computer/service."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_Enroll",
+      "description": "Permission to issue certificates via CA ACL",
+      "is_traversable": false,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **Enroll** edge indicates that a principal can request certificates from a CA through a CA ACL that links users/hosts to certificate templates."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_AddRBCD",
+      "description": "Permission to configure Resource-Based Constrained Delegation (ipaAllowedToPerform;write_delegation)",
+      "is_traversable": false,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **AddRBCD** edge indicates that a principal has the `ipaAllowedToPerform;write_delegation` right on a computer or service, allowing it to configure Resource-Based Constrained Delegation."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_DSync",
+      "description": "DCSync rights inferred from replication manager permissions",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **DSync** edge is inferred when a principal (or group) holds replication-related permissions: `REPLICATION MANAGERS`, `REPLICATION ADMINISTRATORS`, `ADD REPLICATION AGREEMENTS`, or `MODIFY REPLICATION AGREEMENTS`."
+          }
+        }
+      }
+    },
+    {
+      "name": "IPA_TrustedBy",
+      "description": "Active Directory trust relationship",
+      "is_traversable": true,
+      "info": {
+        "overview": {
+          "title": "Overview",
+          "position": 1,
+          "markdown": {
+            "content": "The **TrustedBy** edge represents a trust relationship between a FreeIPA domain and an Active Directory domain. Trusts enable cross-realm authentication and resource access."
+          }
+        }
+      }
+    }
+  ],
+  "environments": [
+    {
+      "environment_kind": "IPA_Domain",
+      "source_kind": "IPA",
+      "principal_kinds": [
+        "IPA_User",
+        "IPA_Computer",
+        "IPA_Service",
+        "IPA_Group",
+        "IPA_Permission",
+        "IPA_Role",
+        "IPA_CA",
+        "IPA_CertificateTemplate",
+        "IPA_SELinux"
+      ]
+    }
+  ]
+}

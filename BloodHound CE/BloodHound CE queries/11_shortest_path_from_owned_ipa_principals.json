@@ -1,0 +1,1 @@
+{"query":"MATCH p=shortestPath((a)-[*1..]->(b:IPA_Computer))\nWHERE a.owned = true AND a <> b\nRETURN p","name":"Shortest Path from Owned IPA Principals","description":"Find shortest paths from owned IPA principals to IPA computers"}
