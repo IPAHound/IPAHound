@@ -42,6 +42,7 @@ The collector operates in two main phases:
 Once collected, data can be imported using either:
 
 - **APOC (Awesome Procedures On Cypher) plugin for Neo4j** (recommended - significantly faster)
+- **BloodHound CE**
 - **Classic BloodHound GUI** (legacy support)
 
 ### Philosophy
