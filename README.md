@@ -242,6 +242,8 @@ Output format options:
                         Output JSON for APOC neo4j plugin (recommended)
   -o FILE, --output FILE
                         Output JSON for BloodHound loader
+  -O FILE
+                        Output JSON for BloodHound CE OpenGraph ingest
 
 Advanced options (debugging):
   --output-raw FILE     Output RAW JSON before processing (useful for debugging)
