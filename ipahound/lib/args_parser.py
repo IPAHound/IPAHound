@@ -66,6 +66,11 @@ def get_parser(dump_types: Optional[List[str]] = None) -> argparse.ArgumentParse
         metavar='FILE',
         help='Output JSON for BloodHound loader'
     )
+    output_group.add_argument(
+        '-O', '--opengraph-output',
+        metavar='FILE',
+        help='Output JSON for BloodHound CE OpenGraph ingest'
+    )
 
     debug_group = parser.add_argument_group('Advanced options (debugging)')
     debug_group.add_argument(
@@ -98,8 +103,8 @@ def post_parsing_arguments(args: argparse.Namespace, logger: logging.Logger) -> 
     if not args.ldap_server:
         validation_errors.append('LDAP server required: Specify --ldap-server')
 
-    if not any([args.output_raw, args.output, args.apoc_output]):
-        validation_errors.append('Output required: Specify at least one of --raw, --output, OR --apoc-output')
+    if not any([args.output_raw, args.output, args.apoc_output, args.opengraph_output]):
+        validation_errors.append('Output required: Specify at least one of --raw, --output, --apoc-output, OR --opengraph-output')
 
     if validation_errors:
         validation_errors[-1] += '\n'

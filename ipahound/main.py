@@ -12,6 +12,7 @@ from rich.console import Console
 from ipahound.lib.args_parser import get_parser, post_parsing_arguments, BANNER
 from ipahound.lib.json_encoder import ExtendedEncoder
 from ipahound.lib.logger import init_logging
+from ipahound.lib.ce_object_processor import OpenGraphPostProcessing
 from ipahound.lib.object_processor import PostProcessing
 
 console = Console()
@@ -527,14 +528,24 @@ def main():
     init_logging(args.debug)
 
     if args.input_raw:
-        PostProcessing(
-            args.input_raw,
-            args.output,
-            args.apoc_output,
-            logging,
-            add_hbac_node=add_hbac_node,
-            save_all_hbac=args.save_all_hbac
-        )
+        if args.opengraph_output:
+            OpenGraphPostProcessing(
+                args.input_raw,
+                args.opengraph_output,
+                None,
+                logging,
+                add_hbac_node=args.add_hbac_node,
+                save_all_hbac=args.save_all_hbac
+            )
+        else:
+            PostProcessing(
+                args.input_raw,
+                args.output,
+                args.apoc_output,
+                logging,
+                add_hbac_node=args.add_hbac_node,
+                save_all_hbac=args.save_all_hbac
+            )
         return
 
     if not post_parsing_arguments(args, logging):
@@ -564,6 +575,18 @@ def main():
                 None,
                 args.output,
                 args.apoc_output,
+                logging,
+                json_data,
+                add_hbac_node=args.add_hbac_node,
+                save_all_hbac=args.save_all_hbac
+            )
+
+        if args.opengraph_output:
+            json_data = dump_ldap_to_json(collector.results, None)
+            OpenGraphPostProcessing(
+                None,
+                args.opengraph_output,
+                None,
                 logging,
                 json_data,
                 add_hbac_node=args.add_hbac_node,

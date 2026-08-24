@@ -1,129 +1,15 @@
 import json
 import logging
 import datetime
-from codecs import ignore_errors
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple, Union
 
 from rich.console import Console
 
+from ipahound.lib.consts import *
 from ipahound.lib.json_encoder import ExtendedEncoder
 
 console = Console()
-
-LIST_ATTRIBUTES = [
-    "krbPrincipalName", "member", "memberOf", "memberHost", "memberUser",
-    "memberService", "memberManager", "managedBy", "ipaAllowedToPerform;read_keys",
-    "ipaAllowedToPerform;write_keys", "ipaUserAuthType"
-]
-
-BLACKLIST_ATTRIBUTES = [
-    "memberof", "member", "objectclass", "usercertificate",
-    "ipasshpubkey", "usercertificate;binary", "krbExtraData"
-]
-
-EDGE_TYPES = [
-    "hbac_service", "hbac_rule", "sudo_rule", "association",
-    "ca_acl", "S4U2Proxy", "IPATrust", "sysaccount",
-    "permissions", "privileges"
-]
-
-EDGE_ATTRIBUTES = [
-    "memberOf", "member", "memberManager", "managedBy",
-    "ipaAllowedToPerform;read_keys", "ipaAllowedToPerform;write_keys",
-    "ipaAllowedToPerform;write_delegation", "memberHost", "memberUser", "ipaExternalMember"
-]
-
-KRB_OK_AS_DELEGATE = 0x100000
-KRB_OK_TO_AUTH_AS_DELEGATE = 0x200000
-
-HIGH_VALUE_GROUPS = ["admins", "trust admins"]
-REPLICATION_PERMISSIONS = [
-    "REPLICATION MANAGERS", "REPLICATION ADMINISTRATORS",
-    "ADD REPLICATION AGREEMENTS", "MODIFY REPLICATION AGREEMENTS"
-]
-
-
-def check_bool_attribute(entry: Dict, attr: str) -> bool:
-    if attr not in entry:
-        return False
-
-    value = entry[attr]
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.upper() == "TRUE"
-    return False
-
-
-def is_enabled(entry: Dict) -> bool:
-    return check_bool_attribute(entry, "ipaEnabledFlag")
-
-
-def is_account_locked(entry: Dict) -> bool:
-    return check_bool_attribute(entry, "nsaccountlock")
-
-
-def search_dict_case_insensitive(src_dict: Dict, key: str) -> Optional[Any]:
-    key_lower = key.lower()
-    for dict_key, value in src_dict.items():
-        if dict_key.lower() == key_lower:
-            return value
-    return None
-
-
-class ObjectProcessor:
-
-    def __init__(self, domain: str):
-        self.domain = domain.upper()
-
-    def get_object_name(self, entry: Dict) -> str:
-        if "krbPrincipalName" in entry:
-            return entry["krbPrincipalName"][0].upper()
-
-        if "sn" in entry:
-            return f'{entry["sn"].upper()}@{self.domain}'
-
-        if "cn" in entry:
-            return f'{entry["cn"].upper()}@{self.domain}'
-
-        if "uid" in entry:
-            uid = entry["uid"]
-            if isinstance(uid, list):
-                uid = uid[0]
-            return f'{uid.upper()}@{self.domain}'
-
-        if 'ipaOriginalUid' in entry:
-            return f'{entry["ipaOriginalUid"].upper()}'
-
-        if "associatedDomain" in entry:
-            return entry["associatedDomain"].upper()
-
-        return entry["dn"].upper()
-
-    def process_attributes(self, entry: Dict) -> Dict:
-        processed = {}
-
-        for key, value in entry.items():
-            if key.lower() in BLACKLIST_ATTRIBUTES:
-                continue
-
-            if isinstance(value, (str, int, bool, type(None), datetime.datetime, bytes)):
-                processed[key] = value
-            elif isinstance(value, list) and value and isinstance(value[0], bytes):
-                processed[key] = b'\n'.join(value)
-            elif isinstance(value, list):
-                processed[key] = '\n'.join(str(v) for v in value)
-            else:
-                processed[key] = value
-
-        if "krbTicketFlags" in processed:
-            flags = processed["krbTicketFlags"]
-            processed["ipakrbokasdelegate"] = bool(flags & KRB_OK_AS_DELEGATE)
-            processed["unconstraineddelegation"] = bool(flags & KRB_OK_AS_DELEGATE)
-            processed["ipakrboktoauthasdelegate"] = bool(flags & KRB_OK_TO_AUTH_AS_DELEGATE)
-
-        return processed
 
 
 class PostProcessing:
@@ -268,7 +154,7 @@ class PostProcessing:
         for obj_type in self.objects:
             if substr:
                 for obj_dn in self.objects[obj_type]:
-                    if dn in obj_dn:
+                    if dn.lower() in obj_dn.lower():
                         return obj_type, self.objects[obj_type][obj_dn]
             elif dn in self.objects[obj_type]:
                 obj = self.objects[obj_type][dn]
@@ -290,6 +176,17 @@ class PostProcessing:
             return obj["type"], obj
 
         return self._create_missing_object(dn)
+
+    def _search_principal(self, principal: str) -> Optional[Dict]:
+        principal_lower = principal.lower()
+        for obj_type in ("IPAService", "IPAComputer"):
+            for obj in self.objects.get(obj_type, {}).values():
+                krb_names = obj.get("krbPrincipalName", [])
+                if isinstance(krb_names, str):
+                    krb_names = [krb_names]
+                if any(k.lower() == principal_lower for k in krb_names):
+                    return obj
+        return None
 
     def _create_missing_object(self, dn: str) -> Tuple[str, Dict]:
         if not "=" in dn or dn[:5] == "S-1-5":
@@ -455,22 +352,22 @@ class PostProcessing:
             for user in users:
                 for service in services:
                     if self._is_ssh_service(service):
-                        self._create_mini_hbac_relationship(user, rule["dn"], memberof=True)
+                        self._create_mini_hbac_relationship(user, rule["dn"], memberof=True, rule=rule)
                     if self._is_sudo_service(service):
                         self._mark_sudo_access(user, rule["dn"])
                     if self.save_all_hbac:
-                        self._create_mini_hbac_relationship(user, rule["dn"], service, memberof=True)
+                        self._create_mini_hbac_relationship(user, rule["dn"], service, memberof=True, rule=rule)
 
             for host in hosts:
                 for service in services:
                     if self._is_ssh_service(service):
-                        self._create_mini_hbac_relationship(rule["dn"], host)
+                        self._create_mini_hbac_relationship(rule["dn"], host, rule=rule)
                     if self._is_sudo_service(service):
                         self._mark_sudo_access(rule["dn"], host)
                     if self.save_all_hbac:
-                        self._create_mini_hbac_relationship(rule["dn"], host, service)
+                        self._create_mini_hbac_relationship(rule["dn"], host, service, rule=rule)
 
-    def _create_mini_hbac_relationship(self, user_dn: str, host_dn: str, service: str = "SSH", memberof=False) -> None:
+    def _create_mini_hbac_relationship(self, user_dn: str, host_dn: str, service: str = "SSH", memberof=False, rule: Dict = None) -> None:
         if service == "*":
             service = "ALL"
         elif service[:3] == "cn=":
@@ -481,8 +378,9 @@ class PostProcessing:
             properties = {}
         else:
             label = f"Can{service}"
-            properties = {"type": "CanSSH"}
-
+            properties = {"type": f"Can{service}"}
+            if rule:
+                properties.update(extract_hbac_rule_metadata(rule))
 
         relationship = {
             "id": self.relationship_id,
@@ -523,11 +421,11 @@ class PostProcessing:
                 for host in hosts:
                     for service in services:
                         if self._is_ssh_service(service):
-                            self._create_hbac_relationship(user, host)
+                            self._create_hbac_relationship(user, host, rule=rule)
                         if self._is_sudo_service(service):
                             self._mark_sudo_access(user, host)
                         if self.save_all_hbac:
-                            self._create_hbac_relationship(user, host, service)
+                            self._create_hbac_relationship(user, host, service, rule=rule)
 
     def _get_rule_targets(self, rule: Dict, target_type: str) -> List[str]:
         category_key = f"{target_type}Category"
@@ -544,16 +442,21 @@ class PostProcessing:
     def _is_sudo_service(self, service_dn: str) -> bool:
         return service_dn == '*' or "cn=Sudo,cn=hbacservicegroups,cn=hbac" in service_dn
 
-    def _create_hbac_relationship(self, user_dn: str, host_dn: str, service: str = "SSH") -> None:
+    def _create_hbac_relationship(self, user_dn: str, host_dn: str, service: str = "SSH", rule: Dict = None) -> None:
         if service == "*":
             service = "ALL"
         elif service[:3] == "cn=":
             service = service[3:service.find(",")]
+
+        properties = {"type": f"Can{service}"}
+        if rule:
+            properties.update(extract_hbac_rule_metadata(rule))
+
         relationship = {
             "id": self.relationship_id,
             "type": "relationship",
             "label": f"Can{service}",
-            "properties": {"type": "CanSSH"},
+            "properties": properties,
             "start": "",
             "end": ""
         }
@@ -874,8 +777,7 @@ class PostProcessing:
 
             sources = []
             for principal in obj["memberPrincipal"]:
-                search_dn = f"krbprincipalname={principal},cn=services,cn=accounts"
-                _, source_obj = self._search_object(search_dn, substr=True)
+                source_obj = self._search_principal(principal)
                 if source_obj:
                     sources.append(source_obj)
 
@@ -886,8 +788,7 @@ class PostProcessing:
 
                 target_group = self.objects["S4U2Proxy"][group_dn]
                 for principal in target_group.get("memberPrincipal", []):
-                    search_dn = f"krbprincipalname={principal},cn=services,cn=accounts"
-                    _, target_obj = self._search_object(search_dn, substr=True)
+                    target_obj = self._search_principal(principal)
                     if target_obj:
                         targets.append(target_obj)
 
@@ -895,8 +796,8 @@ class PostProcessing:
                 for target in targets:
                     relationship = self._generate_relationship_json(
                         self.relationship_id,
-                        "AllowedToDelegate",
-                        {"id": source["id"], "labels": [source["type"]], "properties": {"objectid": target["objectid"]}},
+                        "IPA_AllowedToDelegate",
+                        {"id": source["id"], "labels": [source["type"]], "properties": {"objectid": source["objectid"]}},
                         {"id": target["id"], "labels": [target["type"]], "properties": {"objectid": target["objectid"]}},
                         {"isacl": True}
                     )
@@ -983,8 +884,7 @@ class PostProcessing:
 
             sources = []
             for principal in obj["memberPrincipal"]:
-                search_dn = f"krbprincipalname={principal},cn=services,cn=accounts"
-                _, source_obj = self._search_object(search_dn, substr=True)
+                source_obj = self._search_principal(principal)
                 if source_obj:
                     sources.append(source_obj)
 
@@ -993,10 +893,13 @@ class PostProcessing:
             for source in sources:
                 relationship = self._generate_relationship_json(
                     self.relationship_id,
-                    "AllowedToDelegate",
+                    "IPA_AllowedToDelegate",
                     {"id": source["id"], "labels": ["Base"], "properties": {"objectid": source["objectid"]}},
                     {"id": target["id"], "labels": ["Base"], "properties": {"objectid": target["objectid"]}},
                     {"isacl": True}
                 )
-                self.file_descriptor.write(json.dumps(relationship, cls=ExtendedEncoder) + self.line_ending)
-                self.relationship_id += 1
+
+
+    def _write_to_file(self, part_for_save, relationship=False):
+        self.file_descriptor.write(json.dumps(part_for_save, cls=ExtendedEncoder) + self.line_ending)
+        self.relationship_id += 1
