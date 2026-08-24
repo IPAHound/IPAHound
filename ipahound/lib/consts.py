@@ -18,7 +18,7 @@ BLACKLIST_ATTRIBUTES = [
 EDGE_TYPES = [
     "hbac_service", "hbac_rule", "sudo_rule", "association",
     "ca_acl", "S4U2Proxy", "IPATrust", "sysaccount",
-    "permissions", "privileges"
+    "permissions", "privileges", "sudo_cmd_rule", "sudo_cmd"
 ]
 
 EDGE_ATTRIBUTES = [

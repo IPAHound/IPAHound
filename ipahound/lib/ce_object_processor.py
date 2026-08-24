@@ -491,7 +491,9 @@ class OpenGraphPostProcessing(PostProcessing):
         elif "cn=replication managers,cn=sysaccounts,cn=etc" in dn:
             obj_type = "IPAGroup"
             new_obj["type"] = "sysaccount"
-            self.permissions_and_privileges[dn] = new_obj
+        elif "cn=sysaccounts,cn=etc" in dn:
+            obj_type = "IPAUser"
+            new_obj["type"] = "sysaccount"
         else:
             obj_type = "Base"
             self.lost_objects[dn] = new_obj
@@ -502,7 +504,7 @@ class OpenGraphPostProcessing(PostProcessing):
             "id": node_id,
             "kinds": kinds,
             "properties": {
-                "name": name,
+                "name": f'{name}@{self.domain}',
                 "domain": self.domain,
                 "distinguishedname": dn,
                 "environmentid": self._og_environment_id,
