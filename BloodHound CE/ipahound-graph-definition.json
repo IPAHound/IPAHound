@@ -203,7 +203,7 @@
       "display_name": "IPA Certificate Template",
       "description": "A FreeIPA certificate profile / template",
       "is_display_kind": true,
-      "icon": "file-certificate",
+      "icon": "file-shield",
       "color": "#06b6d4",
       "info": {
         "overview": {
