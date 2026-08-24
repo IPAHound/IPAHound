@@ -1,6 +1,6 @@
 [project]
 name = "ipahound"
-version = "0.0.1"
+version = "0.1.1"
 description = "FreeIPA data collector for BloodHound"
 readme = "README.md"
 requires-python = ">=3.10"
