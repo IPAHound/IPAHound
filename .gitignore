@@ -28,3 +28,5 @@ venv.bak/
 !BloodHound CE/*
 !BloodHound CE/BloodHound CE queries/*
 .idea
+uv.lock
+poetry.lock
