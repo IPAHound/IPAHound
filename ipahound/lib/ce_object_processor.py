@@ -383,22 +383,19 @@ class OpenGraphPostProcessing(PostProcessing):
 
     def _process_domain_relationships(self):
         domain_obj = next(iter(self.objects["IPADomain"].values()))
+        end_id = self._og_node_id(domain_obj.get("objectid", domain_obj.get("dn", "")))
 
-        for dn, perm in self.permissions_and_privileges.items():
-            name = perm["name"].split('@')[0]
-
-            if name in REPLICATION_PERMISSIONS:
-                rel_type = "IPA_DSync"
-            else:
+        for perm in self.permissions_and_privileges.values():
+            spec = PRIVILEGE_EDGE_BY_NAME.get(perm["name"].split('@')[0])
+            if spec is None:
                 continue
 
             start_id = self._og_node_id(perm.get("objectid", perm.get("dn", "")))
-            end_id = self._og_node_id(domain_obj.get("objectid", domain_obj.get("dn", "")))
 
             self.og_edges.append({
                 "start": {"match_by": "id", "value": start_id},
                 "end": {"match_by": "id", "value": end_id},
-                "kind": rel_type,
+                "kind": spec.og_kind,
             })
 
     def _process_s4u2proxy(self):

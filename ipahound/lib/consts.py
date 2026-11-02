@@ -1,4 +1,5 @@
 import datetime
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple, Union
 
 from ipahound.lib.json_encoder import ExtendedEncoder
@@ -35,6 +36,36 @@ REPLICATION_PERMISSIONS = [
     "REPLICATION MANAGERS", "REPLICATION ADMINISTRATORS",
     "ADD REPLICATION AGREEMENTS", "MODIFY REPLICATION AGREEMENTS"
 ]
+
+
+@dataclass(frozen=True)
+class PrivilegeEdgeSpec:
+    """A graph edge inferred from a FreeIPA PBAC permission/privilege name.
+
+    To add a new edge of this class, append a spec to PRIVILEGE_EDGES and
+    declare the og_kind under "relationship_kinds" in
+    "BloodHound CE/ipahound-graph-definition.json".
+    """
+
+    label: str
+    og_kind: str
+    permission_names: Tuple[str, ...]
+    description: str = ""
+    is_acl: bool = True
+
+
+PRIVILEGE_EDGES = [
+    PrivilegeEdgeSpec(
+        label="DCSync",
+        og_kind="IPA_DSync",
+        permission_names=tuple(REPLICATION_PERMISSIONS),
+        description="DCSync rights inferred from replication manager permissions",
+    ),
+]
+
+PRIVILEGE_EDGE_BY_NAME = {
+    name: spec for spec in PRIVILEGE_EDGES for name in spec.permission_names
+}
 
 
 def check_bool_attribute(entry: Dict, attr: str) -> bool:

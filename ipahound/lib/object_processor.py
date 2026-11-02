@@ -853,20 +853,21 @@ class PostProcessing:
     def _process_domain_relationships(self) -> None:
         domain_obj = next(iter(self.objects["IPADomain"].values()))
 
-        for dn, perm in self.permissions_and_privileges.items():
-            name = perm["name"].split('@')[0]
-
-            if name in REPLICATION_PERMISSIONS:
-                rel_type = "DCSync"
-            else:
+        for perm in self.permissions_and_privileges.values():
+            spec = PRIVILEGE_EDGE_BY_NAME.get(perm["name"].split('@')[0])
+            if spec is None:
                 continue
+
+            properties = {"isacl": spec.is_acl}
+            if spec.description:
+                properties["description"] = spec.description
 
             relationship = self._generate_relationship_json(
                 self.relationship_id,
-                rel_type,
+                spec.label,
                 {"id": perm["id"], "labels": ["Base"], "properties": {"objectid": perm["objectid"]}},
                 self._generate_node_json(domain_obj["id"], "Base", properties={"objectid": domain_obj["objectid"]}),
-                {"isacl": True}
+                properties
             )
 
             self.file_descriptor.write(
@@ -878,7 +879,7 @@ class PostProcessing:
         if "IPAComputer" not in self.objects and "IPAService" not in self.objects:
             return
 
-        for obj in list(self.objects["IPAComputer"].values()) + list(self.objects["IPAService"].values()):
+        for obj in list(self.objects.get("IPAComputer", {}).values()) + list(self.objects.get("IPAService", {}).values()):
             if "memberPrincipal" not in obj:
                 continue
 
@@ -898,6 +899,11 @@ class PostProcessing:
                     {"id": target["id"], "labels": ["Base"], "properties": {"objectid": target["objectid"]}},
                     {"isacl": True}
                 )
+
+                self.file_descriptor.write(
+                    json.dumps(relationship, cls=ExtendedEncoder) + self.line_ending
+                )
+                self.relationship_id += 1
 
 
     def _write_to_file(self, part_for_save, relationship=False):
