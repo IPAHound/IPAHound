@@ -13,7 +13,7 @@ LIST_ATTRIBUTES = [
 
 BLACKLIST_ATTRIBUTES = [
     "memberof", "member", "objectclass", "usercertificate",
-    "ipasshpubkey", "usercertificate;binary", "krbExtraData"
+    "ipasshpubkey", "usercertificate;binary", "krbExtraData", "aci"
 ]
 
 EDGE_TYPES = [
