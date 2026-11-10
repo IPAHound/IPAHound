@@ -796,7 +796,7 @@ class PostProcessing:
                 for target in targets:
                     relationship = self._generate_relationship_json(
                         self.relationship_id,
-                        "IPA_AllowedToDelegate",
+                        "AllowedToDelegate",
                         {"id": source["id"], "labels": [source["type"]], "properties": {"objectid": source["objectid"]}},
                         {"id": target["id"], "labels": [target["type"]], "properties": {"objectid": target["objectid"]}},
                         {"isacl": True}
@@ -894,7 +894,7 @@ class PostProcessing:
             for source in sources:
                 relationship = self._generate_relationship_json(
                     self.relationship_id,
-                    "IPA_AllowedToDelegate",
+                    "AllowedToDelegate",
                     {"id": source["id"], "labels": ["Base"], "properties": {"objectid": source["objectid"]}},
                     {"id": target["id"], "labels": ["Base"], "properties": {"objectid": target["objectid"]}},
                     {"isacl": True}
