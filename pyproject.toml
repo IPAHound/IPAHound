@@ -5,6 +5,11 @@ description = "FreeIPA data collector for BloodHound"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "BSD-2-Clause"
+dependencies = [
+    "ldap3>=2.9.1",
+    "rich>=14.2.0",
+    "gssapi>=1.12.0",
+]
 authors = [
     { name = "Mikhail Sukhov", email = "msukhov@ptsecurity.com" }
 ]
@@ -20,10 +25,14 @@ classifiers = [
     "Topic :: System :: Systems Administration :: Authentication/Directory :: LDAP",
 ]
 
-dependencies = [
-    "ldap3>=2.9.1",
-    "rich>=14.2.0",
-]
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 
 [tool.setuptools.packages.find]
 include = ["ipahound*"]
