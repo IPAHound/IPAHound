@@ -215,10 +215,11 @@ The repo also ships a `poetry.lock` if you prefer [Poetry](https://python-poetry
 |_____|__|  |__|__|__|__|___|___|_|_|___|
      by Mikhail Sukhov (@Im10n), @ptswarm
 
-usage: ipahound [-h] [-d] [-s SERVER] [-b BASE_DN] [-u USER] [-p PASSWORD] [-k]
-                [--save-all-hbac] [-a FILE] [-o FILE] [--output-raw FILE] [--input-raw FILE]
+usage: ipahound [-h] [-d] [-s SERVER] [-b BASE_DN] [-u USER] [-p PASSWORD]
+                [-k] [-f FILE] [--save-all-hbac] [--add-hbac-node] [-a FILE]
+                [-o FILE] [-O FILE] [--output-raw FILE] [--input-raw FILE]
 
-IPA BloodHound Collector
+IPA BloodHound Сollector
 
 options:
   -h, --help            Show this help message and exit
@@ -236,6 +237,11 @@ Authentication options:
   -p PASSWORD, --ldap-password PASSWORD
                         Password for LDAP authentication
   -k, --kerberos        Use Kerberos authentication instead of username/password
+
+Offline collection:
+  -f FILE, --offlain FILE
+                        Collect data from an offline 389-ds id2entry.db
+                        database file instead of querying LDAP
 
 Output format options:
   --save-all-hbac       Draw all HBAC services in the graph (default: only sudo and SSH)
@@ -270,6 +276,12 @@ Process an existing raw dump (no LDAP traffic):
 
 ```console
 ~$ ipahound --input-raw raw_dump.json -a processed_output.json
+```
+
+Collect from a database file copied off a FreeIPA DC (no LDAP traffic, no credentials needed):
+
+```console
+~$ ipahound -f id2entry.db -a out_for_apoc.json
 ```
 
 ## Loading Data into Neo4j

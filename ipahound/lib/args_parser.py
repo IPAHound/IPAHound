@@ -45,6 +45,13 @@ def get_parser(dump_types: Optional[List[str]] = None) -> argparse.ArgumentParse
         help='Use Kerberos authentication instead of username/password'
     )
 
+    offline_group = parser.add_argument_group('Offline collection')
+    offline_group.add_argument(
+        '-f', '--offlain',
+        metavar='FILE',
+        help='Collect data from an offline 389-ds id2entry.db database file instead of querying LDAP'
+    )
+
     output_group = parser.add_argument_group('Output format options')
     output_group.add_argument(
         '--save-all-hbac',
@@ -91,7 +98,7 @@ def get_parser(dump_types: Optional[List[str]] = None) -> argparse.ArgumentParse
 def post_parsing_arguments(args: argparse.Namespace, logger: logging.Logger) -> bool:
     validation_errors = []
 
-    if args.input_raw:
+    if args.input_raw or args.offlain:
         return True
 
     if not args.kerberos:

@@ -557,6 +557,11 @@ def main():
     init_logging(args.debug)
 
     if args.input_raw:
+        if args.offlain:
+            logging.warning(
+                'Both --input-raw and --offlain specified. '
+                '--input-raw takes precedence, ignoring --offlain'
+            )
         if args.opengraph_output:
             OpenGraphPostProcessing(
                 args.input_raw,
@@ -575,6 +580,16 @@ def main():
                 add_hbac_node=args.add_hbac_node,
                 save_all_hbac=args.save_all_hbac
             )
+        return
+
+    if args.offlain:
+        from ipahound.lib.db_collector import DBCollector
+
+        collector = DBCollector(args.offlain)
+        if not collector.dump_db_data():
+            return
+
+        _write_outputs(collector.results, args)
         return
 
     if not post_parsing_arguments(args, logging):
