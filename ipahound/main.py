@@ -516,6 +516,35 @@ def _process_entry_attributes(entry) -> Dict[str, Any]:
     return attributes
 
 
+def _write_outputs(results: Dict[str, List], args) -> None:
+    if args.output_raw:
+        dump_ldap_to_json(results, args.output_raw)
+
+    if args.output or args.apoc_output:
+        json_data = dump_ldap_to_json(results, None)
+        PostProcessing(
+            None,
+            args.output,
+            args.apoc_output,
+            logging,
+            json_data,
+            add_hbac_node=args.add_hbac_node,
+            save_all_hbac=args.save_all_hbac
+        )
+
+    if args.opengraph_output:
+        json_data = dump_ldap_to_json(results, None)
+        OpenGraphPostProcessing(
+            None,
+            args.opengraph_output,
+            None,
+            logging,
+            json_data,
+            add_hbac_node=args.add_hbac_node,
+            save_all_hbac=args.save_all_hbac
+        )
+
+
 def main():
     parser = get_parser(LDAPPathConfig.PATHS.keys())
 
@@ -566,32 +595,7 @@ def main():
 
         collector.dump_ldap_data()
 
-        if args.output_raw:
-            dump_ldap_to_json(collector.results, args.output_raw)
-
-        if args.output or args.apoc_output:
-            json_data = dump_ldap_to_json(collector.results, None)
-            PostProcessing(
-                None,
-                args.output,
-                args.apoc_output,
-                logging,
-                json_data,
-                add_hbac_node=args.add_hbac_node,
-                save_all_hbac=args.save_all_hbac
-            )
-
-        if args.opengraph_output:
-            json_data = dump_ldap_to_json(collector.results, None)
-            OpenGraphPostProcessing(
-                None,
-                args.opengraph_output,
-                None,
-                logging,
-                json_data,
-                add_hbac_node=args.add_hbac_node,
-                save_all_hbac=args.save_all_hbac
-            )
+        _write_outputs(collector.results, args)
 
 
 if __name__ == '__main__':
