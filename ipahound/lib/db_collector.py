@@ -93,8 +93,10 @@ def _decode_value(name: str, encoded: bool, value: str) -> Union[str, bytes]:
 def parse_entry_record(raw: bytes) -> Dict[str, AttributeValues]:
     """Parse one id2entry.db record into {attribute: [values]}.
 
-    ``rdn`` is an id2entry-internal attribute and is dropped; ``dsEntryDN``
-    is kept (the caller uses it as the entry DN and removes it afterwards).
+    ``rdn`` and ``dsEntryDN`` are id2entry-internal attributes: the caller
+    uses them as the entry DN (``dsEntryDN`` directly, ``rdn``+``parentid``
+    chains as a fallback for databases written before 389-ds started
+    storing ``dsEntryDN``) and drops both when building the entry.
     """
     attributes: Dict[str, AttributeValues] = {}
 
@@ -114,7 +116,7 @@ def parse_entry_record(raw: bytes) -> Dict[str, AttributeValues]:
             continue
 
         name = _normalize_attribute_name(line[:separator])
-        if name is None or name.lower() == "rdn":
+        if name is None:
             continue
 
         rest = line[separator + 1:]
@@ -195,16 +197,35 @@ def objectclass_from_filter(ldap_filter: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def _first_int(values: Optional[AttributeValues]) -> Optional[int]:
+    if not values:
+        return None
+    value = values[0]
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return int(value)
+    return None
+
+
 def collect_entries(
     values: Iterable[bytes]
 ) -> Tuple[List[Tuple[str, Dict[str, AttributeValues], Set[str]]], Optional[str]]:
     """Parse raw records into (dn, attributes, objectclasses) tuples.
 
+    The entry DN comes from ``dsEntryDN`` when present. Databases written
+    before 389-ds stored that attribute keep only ``rdn`` + ``parentid``:
+    for those the DN is rebuilt by walking the parent chain up to the
+    suffix entry (the same reconstruction dbscan performs).
+
     Returns the tuples along with the detected base DN (entry with
     objectClass=domain, shortest DN wins) or None when no domain entry
     exists - in that case the file is not a FreeIPA database.
     """
-    entries: List[Tuple[str, Dict[str, AttributeValues], Set[str]]] = []
+    records: List[Tuple[Dict[str, AttributeValues], Set[str]]] = []
+    # entryid -> (rdn, parentid): the DN-recovery index for records
+    # without dsEntryDN
+    entry_index: Dict[int, Tuple[Optional[str], Optional[int]]] = {}
 
     for raw in values:
         attributes = parse_entry_record(raw)
@@ -217,12 +238,66 @@ def collect_entries(
             logging.debug("Skipping tombstone database record")
             continue
 
-        dn_values = attributes.get("dsEntryDN", [])
-        if not dn_values or not isinstance(dn_values[0], str):
-            logging.debug("Skipping database record without dsEntryDN")
-            continue
+        entry_id = _first_int(attributes.get("entryid"))
+        if entry_id is not None and entry_id not in entry_index:
+            rdn_values = attributes.get("rdn", [])
+            rdn = rdn_values[0] if rdn_values and isinstance(rdn_values[0], str) else None
+            entry_index[entry_id] = (rdn, _first_int(attributes.get("parentid")))
 
-        entries.append((dn_values[0], attributes, object_classes))
+        records.append((attributes, object_classes))
+
+    def resolve_dn(entry_id: int) -> Tuple[Optional[str], Optional[str]]:
+        """Rebuild a DN from rdn -> parentid chains. Returns (dn, error)."""
+        rdns: List[str] = []
+        seen: Set[int] = set()
+        current: Optional[int] = entry_id
+
+        while True:
+            if current is None or current <= 0:
+                # chain walked up to the suffix entry: DNs read from the
+                # entry towards the root, exactly in collection order
+                return ",".join(rdns), None
+            if current in seen:
+                return None, "parentid cycle"
+            if current not in entry_index:
+                return None, f"parent entryid {current} is missing"
+
+            seen.add(current)
+            rdn, parent = entry_index[current]
+            if not rdn:
+                return None, "record has no rdn attribute"
+            rdns.append(rdn)
+            current = parent
+
+    entries: List[Tuple[str, Dict[str, AttributeValues], Set[str]]] = []
+    recovered = 0
+
+    for attributes, object_classes in records:
+        dn_values = attributes.get("dsEntryDN", [])
+        if dn_values and isinstance(dn_values[0], str):
+            dn = dn_values[0]
+        else:
+            entry_id = _first_int(attributes.get("entryid"))
+            if entry_id is None:
+                logging.debug(
+                    "Skipping database record without dsEntryDN and entryid"
+                )
+                continue
+            dn, error = resolve_dn(entry_id)
+            if dn is None:
+                logging.debug(
+                    f"Cannot rebuild DN for entryid {entry_id}: {error}"
+                )
+                continue
+            recovered += 1
+
+        entries.append((dn, attributes, object_classes))
+
+    if recovered:
+        logging.debug(
+            f"Rebuilt {recovered} DNs from rdn/parentid chains "
+            f"(records without dsEntryDN)"
+        )
 
     domain_dns = [
         dn for dn, _, classes in entries
@@ -252,6 +327,13 @@ class DBCollector:
         except (BdbError, OSError) as err:
             logging.error(f"Failed to read database file {self.db_path}: {err}")
             return False
+
+        if reader.read_errors:
+            logging.warning(
+                f"Skipped {len(reader.read_errors)} damaged item(s)/page(s) in "
+                f"{self.db_path}, the database file is likely a hot copy: "
+                f"{reader.read_errors[0]}"
+            )
 
         if not entries:
             logging.error(f"No usable entries found in {self.db_path}")
@@ -296,6 +378,8 @@ class DBCollector:
 
         seen = set()
         for dn, attributes, object_classes in entries:
+            if "Manage Host Certificates" in dn:
+                pass
             for search_base, scope, required_class, type_name in rules:
                 if not dn_matches(dn, search_base, scope):
                     continue
@@ -309,7 +393,7 @@ class DBCollector:
 
                 entry_attributes = {
                     name: values for name, values in attributes.items()
-                    if name != "dsEntryDN"
+                    if name not in ("dsEntryDN", "rdn")
                 }
                 self.results.setdefault(type_name, []).append(
                     DbEntry(dn, entry_attributes)

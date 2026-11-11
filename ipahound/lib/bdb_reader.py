@@ -31,7 +31,7 @@ and internal page item formats.
 """
 
 import struct
-from typing import Iterator, List, Tuple
+from typing import Iterator, List, Optional, Tuple
 
 BTREE_MAGIC = 0x00053162
 BTREE_VERSION = 9
@@ -65,6 +65,7 @@ class BdbBtreeReader:
             self._data = f.read()
         self._pagesize = 0
         self._endian = "<"
+        self.read_errors: List[str] = []
         self._load_meta()
 
     def _load_meta(self) -> None:
@@ -165,62 +166,90 @@ class BdbBtreeReader:
         return value
 
     def _parse_leaf_page(self, pgno: int) -> List[Tuple[bytes, bytes]]:
+        """Parse one leaf page, skipping unreadable pairs.
+
+        Database files copied off a live server (or after a crash) can
+        contain half-written pages and broken overflow chains. Instead of
+        aborting the whole read, damaged pairs are dropped and described
+        in ``self.read_errors`` - salvaging every intact record matters
+        more than failing loudly on a forensic copy.
+        """
         page_start = pgno * self._pagesize
         entries = self._u16(pgno, 20)
         if entries % 2 != 0:
-            raise BdbError(
-                f"Odd item count {entries} on leaf page {pgno}"
+            self.read_errors.append(
+                f"page {pgno}: odd item count {entries}, last item ignored"
             )
+            entries -= 1
 
-        items: List[Tuple[bool, bytes]] = []
+        # items[i] is (deleted, value) for a readable item or None otherwise
+        items: List[Optional[Tuple[bool, bytes]]] = []
         for i in range(entries):
             item_offset = self._u16(pgno, PAGE_HEADER_SIZE + 2 * i)
             if (
                 item_offset < PAGE_HEADER_SIZE + 2 * entries
                 or item_offset >= self._pagesize
             ):
-                raise BdbError(
-                    f"Item offset {item_offset} out of range on page {pgno}"
+                self.read_errors.append(
+                    f"page {pgno}: item {i} offset {item_offset} out of range"
                 )
+                items.append(None)
+                continue
 
             item_type = self._data[page_start + item_offset + 2]
             deleted = bool(item_type & B_DELETE)
             item_type &= ~B_DELETE
 
-            if item_type == B_KEYDATA:
-                data_len, = struct.unpack_from(
-                    self._endian + "H", self._data, page_start + item_offset
-                )
-                value_start = page_start + item_offset + 3
-                value = self._data[value_start:value_start + data_len]
-                if len(value) != data_len:
-                    raise BdbError(f"Truncated item on page {pgno}")
-            elif item_type == B_OVERFLOW:
-                first_pgno, total_length = struct.unpack_from(
-                    self._endian + "II",
-                    self._data,
-                    page_start + item_offset + 4,
-                )
-                value = self._read_overflow(first_pgno, total_length)
-            else:
-                raise BdbError(
-                    f"Unsupported item type {item_type} on leaf page {pgno}"
-                )
+            try:
+                if item_type == B_KEYDATA:
+                    data_len, = struct.unpack_from(
+                        self._endian + "H", self._data, page_start + item_offset
+                    )
+                    value_start = page_start + item_offset + 3
+                    value = self._data[value_start:value_start + data_len]
+                    if len(value) != data_len:
+                        raise BdbError("truncated item")
+                elif item_type == B_OVERFLOW:
+                    first_pgno, total_length = struct.unpack_from(
+                        self._endian + "II",
+                        self._data,
+                        page_start + item_offset + 4,
+                    )
+                    value = self._read_overflow(first_pgno, total_length)
+                else:
+                    raise BdbError(f"unsupported item type {item_type}")
+            except BdbError as err:
+                self.read_errors.append(f"page {pgno}: item {i}: {err}")
+                items.append(None)
+                continue
 
             items.append((deleted, value))
 
         pairs: List[Tuple[bytes, bytes]] = []
         for i in range(0, len(items), 2):
-            key_deleted, key = items[i]
-            value_deleted, value = items[i + 1]
+            key_item = items[i]
+            value_item = items[i + 1]
+            if key_item is None or value_item is None:
+                self.read_errors.append(
+                    f"page {pgno}: dropped pair at index {i // 2} "
+                    f"(key or value unreadable)"
+                )
+                continue
+            key_deleted, key = key_item
+            value_deleted, value = value_item
             if key_deleted or value_deleted:
                 continue
             pairs.append((key, value))
         return pairs
 
     def items(self) -> Iterator[Tuple[bytes, bytes]]:
-        """Yield all (key, value) pairs in key order."""
+        """Yield all (key, value) pairs in key order.
+
+        Unreadable pages and pairs are skipped and reported through
+        ``self.read_errors`` (see _parse_leaf_page).
+        """
         pairs: List[Tuple[bytes, bytes]] = []
+        self.read_errors = []
 
         for pgno in range(1, self._page_count()):
             page_type = self._page_type(pgno)
@@ -229,8 +258,8 @@ class BdbBtreeReader:
             if page_type == P_LBTREE:
                 pairs.extend(self._parse_leaf_page(pgno))
                 continue
-            raise BdbError(
-                f"Unsupported page type {page_type} on page {pgno}"
+            self.read_errors.append(
+                f"skipping page {pgno}: unsupported page type {page_type}"
             )
 
         pairs.sort(key=lambda pair: pair[0])
